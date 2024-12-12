@@ -14,7 +14,7 @@ It has been made specifically for a private Minecraft server with keepInventory 
 
 - `/kys`: Executes the Kys command.
 - `/kyssetting`: Configures the Kys settings.
-- `/kys countreset`: Resets the count of successful and unsuccessful attempts.
+- `/kyssetting countreset`: Resets the count of successful and unsuccessful attempts.
 
 ## Installation
 
