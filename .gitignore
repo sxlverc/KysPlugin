@@ -1,0 +1,6 @@
+#Exclude target directory
+target/
+#Exclude all .iml files
+untitled.iml
+#Exclude all .idea files
+.idea/
