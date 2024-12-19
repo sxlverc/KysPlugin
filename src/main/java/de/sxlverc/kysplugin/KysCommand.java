@@ -2,6 +2,8 @@ package de.sxlverc.kysplugin;
 
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
+import org.bukkit.Sound;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -12,8 +14,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.Sound;
-import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Random;
@@ -34,83 +34,90 @@ public class KysCommand implements CommandExecutor {
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (sender instanceof Player) {
-            Player player = (Player) sender;
-            PersistentDataContainer data = player.getPersistentDataContainer();
-
-            if (args.length > 0 && "countreset".equalsIgnoreCase(args[0])) {
-                data.set(successfulAttemptsKey, PersistentDataType.INTEGER, 0);
-                data.set(unsuccessfulAttemptsKey, PersistentDataType.INTEGER, 0);
-                player.sendMessage("Successful and unsuccessful attempts have been reset.");
-                return true;
-            }
-
-            int successfulAttempts = data.getOrDefault(successfulAttemptsKey, PersistentDataType.INTEGER, 0);
-            int unsuccessfulAttempts = data.getOrDefault(unsuccessfulAttemptsKey, PersistentDataType.INTEGER, 0);
-
-            String mode = kysSettingCommand.getMode(player);
-            boolean success = false;
-            if ("russian_roulette".equalsIgnoreCase(mode)) {
-                if (unsuccessfulAttempts >= 5) {
-                    success = true; // Force success on the 6th attempt
-                } else {
-                    success = random.nextInt(6) == 0; // 1/6 chance
-                    if (!success) {
-                        unsuccessfulAttempts++;
-                    }
-                }
-                if (success) {
-                    player.setHealth(0);
-                    player.sendMessage("Revolver reloaded.");
-                } else {
-                    player.sendMessage("Not yet.");
-                }
-                data.set(unsuccessfulAttemptsKey, PersistentDataType.INTEGER, unsuccessfulAttempts);
-            } else if ("5050".equalsIgnoreCase(mode)) {
-                success = random.nextBoolean(); // 50/50 chance
-                if (success) {
-                    player.setHealth(0);
-                    player.playSound(player.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1, 1);
-                    successfulAttempts++;
-                    data.set(successfulAttemptsKey, PersistentDataType.INTEGER, successfulAttempts);
-                } else {
-                    PotionEffectType[] effects = {
-                            PotionEffectType.POISON,
-                            PotionEffectType.NAUSEA, // Nausea
-                            PotionEffectType.SLOWNESS, // Slowness
-                            PotionEffectType.BLINDNESS, // Darkness
-                    };
-                    PotionEffectType randomEffect = effects[random.nextInt(effects.length)];
-                    if (kysSettingCommand.isEffectEnabled(player, randomEffect)) {
-                        int duration = 72000; // Default duration
-                        int amplifier = 1; // Default amplifier
-                        player.addPotionEffect(new PotionEffect(randomEffect, duration, amplifier));
-                        player.sendMessage("No death today, but you feel sick. You have been affected by " + randomEffect.getName().toLowerCase() + ".");
-                        unsuccessfulAttempts++;
-                        data.set(unsuccessfulAttemptsKey, PersistentDataType.INTEGER, unsuccessfulAttempts);
-                        spawnRandomParticles(player);
-                        new BukkitRunnable() {
-                            @Override
-                            public void run() {
-                                spawnRandomParticles(player);
-                            }
-                        }.runTaskLater(plugin, 10L); // 10 ticks = 0.5 seconds
-                    } else {
-                        // Default action if no effect is enabled
-                        player.sendMessage("No death today, but you feel a strange sensation.");
-                        unsuccessfulAttempts++;
-                        data.set(unsuccessfulAttemptsKey, PersistentDataType.INTEGER, unsuccessfulAttempts);
-                    }
-                }
-                player.sendMessage("Successful attempts: " + successfulAttempts);
-                player.sendMessage("Unsuccessful attempts: " + unsuccessfulAttempts);
-            }
-            return true;
-        } else {
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+        if (!(sender instanceof Player player)) {
             sender.sendMessage("This command can only be run by a player.");
             return false;
         }
+
+        PersistentDataContainer data = player.getPersistentDataContainer();
+
+        if (player.getWorld().getEnvironment() == World.Environment.NETHER) {
+            player.sendMessage("You can't use this command in the Nether.");
+            return true;
+        }
+
+        if (args.length > 0 && "countreset".equalsIgnoreCase(args[0])) {
+            resetCounts(data, player);
+            return true;
+        }
+
+        int successfulAttempts = data.getOrDefault(successfulAttemptsKey, PersistentDataType.INTEGER, 0);
+        int unsuccessfulAttempts = data.getOrDefault(unsuccessfulAttemptsKey, PersistentDataType.INTEGER, 0);
+
+        String mode = kysSettingCommand.getMode(player);
+        if ("russian_roulette".equalsIgnoreCase(mode)) {
+            handleRussianRoulette(player, data, unsuccessfulAttempts);
+        } else if ("5050".equalsIgnoreCase(mode)) {
+            handle5050Mode(player, data, successfulAttempts, unsuccessfulAttempts);
+        }
+
+        return true;
+    }
+
+    private void resetCounts(PersistentDataContainer data, Player player) {
+        data.set(successfulAttemptsKey, PersistentDataType.INTEGER, 0);
+        data.set(unsuccessfulAttemptsKey, PersistentDataType.INTEGER, 0);
+        player.sendMessage("Successful and unsuccessful attempts have been reset."); //Output message when successful and unsuccessful attempts have been reset
+    }
+
+    private void handleRussianRoulette(Player player, PersistentDataContainer data, int unsuccessfulAttempts) {
+        boolean success = unsuccessfulAttempts >= 5 || random.nextInt(6) == 0;
+        if (success) {
+            player.setHealth(0);
+            player.sendMessage("Bang!"); //Output message when russian roulette is lost
+            data.set(unsuccessfulAttemptsKey, PersistentDataType.INTEGER, 0); // Reset unsuccessful attempts
+        } else {
+            player.sendMessage("Click! not yet..."); //Output message when russian roulette is won
+            data.set(unsuccessfulAttemptsKey, PersistentDataType.INTEGER, unsuccessfulAttempts + 1);
+        }
+    }
+
+    private void handle5050Mode(Player player, PersistentDataContainer data, int successfulAttempts, int unsuccessfulAttempts) {
+        boolean success = random.nextBoolean();
+        if (success) {
+            player.setHealth(0);
+            player.playSound(player.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1, 1);
+            data.set(successfulAttemptsKey, PersistentDataType.INTEGER, successfulAttempts + 1);
+        } else {
+            applyRandomEffect(player, data, unsuccessfulAttempts);
+        }
+        player.sendMessage("Successful attempts: " + successfulAttempts);  //Outputs both after each attempt
+        player.sendMessage("Unsuccessful attempts: " + unsuccessfulAttempts); //Outputs both after each attempt
+    }
+
+    private void applyRandomEffect(Player player, PersistentDataContainer data, int unsuccessfulAttempts) {
+        PotionEffectType[] effects = {
+                PotionEffectType.POISON,
+                PotionEffectType.NAUSEA,
+                PotionEffectType.SLOWNESS,
+                PotionEffectType.BLINDNESS,
+        };
+        PotionEffectType randomEffect = effects[random.nextInt(effects.length)];
+        if (kysSettingCommand.isEffectEnabled(player, randomEffect)) {
+            player.addPotionEffect(new PotionEffect(randomEffect, 72000, 1));
+            player.sendMessage("No death today, but you feel sick. You have been affected by " + randomEffect.getKey().getKey().toLowerCase() + ".");
+            spawnRandomParticles(player); //^^^Output message when an effect is applied
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    spawnRandomParticles(player);
+                }
+            }.runTaskLater(plugin, 10L);
+        } else {
+            player.sendMessage("No death today, but you feel a strange sensation.");
+        }                           //Output message when no effect is applied
+        data.set(unsuccessfulAttemptsKey, PersistentDataType.INTEGER, unsuccessfulAttempts + 1);
     }
 
     private void spawnRandomParticles(Player player) {
@@ -118,8 +125,7 @@ public class KysCommand implements CommandExecutor {
             double offsetX = (random.nextDouble() - 0.5) * 2;
             double offsetY = random.nextDouble();
             double offsetZ = (random.nextDouble() - 0.5) * 2;
-            Vector offset = new Vector(offsetX, offsetY, offsetZ);
-            player.getWorld().spawnParticle(Particle.RAID_OMEN, player.getLocation().add(offset), 1);
+            player.getWorld().spawnParticle(Particle.RAID_OMEN, player.getLocation().add(offsetX, offsetY, offsetZ), 1);
         }
     }
 }
