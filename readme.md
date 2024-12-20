@@ -34,3 +34,13 @@ To build the plugin from source, you need to have Maven installed. Run the follo
 mvn clean package
 ```
 The compiled jar file will be located in the target directory.
+
+
+## Changelog
+
+1.1\
+Improved the command to have less Java Errors (fuck java)\
+Added the inabililty to use the command in the nether\
+
+1.2\
+Added the inability to run the command in the End
