@@ -47,6 +47,11 @@ public class KysCommand implements CommandExecutor {
             return true;
         }
 
+        if (player.getWorld().getEnvironment() == World.Environment.THE_END) {
+            player.sendMessage("You can't use this command in the End.");
+            return true;
+        }
+
         if (args.length > 0 && "countreset".equalsIgnoreCase(args[0])) {
             resetCounts(data, player);
             return true;
